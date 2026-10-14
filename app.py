@@ -1,13 +1,12 @@
+
 import streamlit as st
 import pandas as pd
 import tensorflow as tf
 import joblib
 from pathlib import Path
 
-
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "models"
-
 
 st.set_page_config(
     page_title="Legendary PassFail",
@@ -21,28 +20,31 @@ def load_artifacts():
     model = tf.keras.models.load_model(
         MODEL_DIR / "model.keras"
     )
-
     preprocessor = joblib.load(
         MODEL_DIR / "preprocessor.pkl"
     )
+    threshold = float(
+        joblib.load(MODEL_DIR / "threshold.pkl")
+    )
+    return model, preprocessor, threshold
 
-    return model, preprocessor
 
-
-model, preprocessor = load_artifacts()
-
+model, preprocessor, threshold = load_artifacts()
 
 st.title("🎓 Legendary PassFail")
 st.subheader("Student Pass/Fail Prediction")
 
 st.write(
-    "Enter the student's details and academic marks "
-    "to predict whether they are likely to pass or fail."
+    "Estimate a student's likelihood of passing using "
+    "their age, sex, weekly study time, and absences."
 )
 
+st.info(
+    "This model uses four features and does not use "
+    "previous-period grades."
+)
 
 with st.form("student_form"):
-
     sex = st.selectbox(
         "Sex",
         options=["F", "M"]
@@ -77,44 +79,43 @@ with st.form("student_form"):
 
     submitted = st.form_submit_button("Predict Result")
 
-
 if submitted:
-
     student_data = pd.DataFrame([{
         "sex": sex,
         "age": age,
         "studytime": studytime,
-        "absences": absences,
+        "absences": absences
     }])
-
-    st.write("DEBUG: Form submitted successfully!")
 
     try:
         processed_data = preprocessor.transform(student_data)
 
-        st.write("DEBUG: Preprocessing successful")
-        st.write("Processed input shape:", processed_data.shape)
-
-        prediction_probability = float(
+        probability = float(
             model.predict(processed_data, verbose=0)[0][0]
         )
 
-        if prediction_probability >= 0.5:
+        if probability >= threshold:
             st.success("Prediction: PASS 🎉")
         else:
             st.error("Prediction: FAIL")
 
         st.metric(
             "Estimated Probability of Passing",
-            f"{prediction_probability:.2%}"
+            f"{probability:.2%}"
         )
 
         st.caption(
-            "This is a model estimate, not a guarantee "
-            "of the student's final result."
+            f"Classification threshold: {threshold:.2f}"
         )
 
-    except Exception as error:
-        st.error("Prediction failed. Here are the error details:")
-        st.exception(error)
+        st.caption(
+            "This is an experimental model estimate, "
+            "not a guarantee of the student's final result."
+        )
 
+    except Exception:
+        st.error(
+            "Prediction failed. Please check that the "
+            "model and preprocessing files are compatible."
+        )
+        st.exception(Exception("See the deployment logs for details."))
